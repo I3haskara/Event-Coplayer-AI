@@ -1,0 +1,15 @@
+* text=auto
+
+# Treat Python files as text with LF normalization
+*.py text eol=lf
+
+# Keep binary assets untouched
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.mp3 binary
+*.mp4 binary
+*.pdf binary
+*.pptx binary
+*.docx binary
+*.xlsx binary

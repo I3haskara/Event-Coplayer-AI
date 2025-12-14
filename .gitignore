@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Environment variables
+.env
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Generated assets
+assets/generated_report.png
+UI_ASSET_EXPORT.svg
+MEETING_LOG_Q3.txt
+
+# Notebook checkpoints
+.ipynb_checkpoints/
