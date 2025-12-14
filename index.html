@@ -1,0 +1,212 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Silent Executive — Vertical Slice Demo</title>
+  <style>
+    :root {
+      --bg: #0d0d0d;
+      --panel: #121212;
+      --accent: #00ff41;
+      --accent2: #A259FF;
+      --danger: #ff3333;
+      --text: #ffffff;
+      --muted: #888888;
+      --line: #333333;
+    }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+    }
+    .wrap {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 24px 64px;
+    }
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 24px;
+    }
+    .title {
+      font-weight: 700;
+      letter-spacing: 0.6px;
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: #111;
+      color: var(--accent);
+      padding: 6px 10px;
+      border-radius: 16px;
+      border: 1px solid var(--line);
+      font-size: 12px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: 20px;
+    }
+    .card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .card h3 { margin: 0 0 8px; font-size: 16px; color: var(--muted); }
+    .card .subtitle { color: var(--accent); font-family: "Courier New", monospace; font-size: 13px; }
+    .actions { display: flex; gap: 12px; margin-top: 12px; }
+    button {
+      background: linear-gradient(180deg, #00ff41 0%, #009f2a 100%);
+      color: #021b08;
+      border: none;
+      padding: 10px 14px;
+      border-radius: 8px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button.secondary { background: linear-gradient(180deg, #A259FF 0%, #5b2ea6 100%); color: #0e061a; }
+    button.ghost { background: #1a1a1a; color: var(--text); border: 1px solid var(--line); }
+    .status {
+      margin-top: 12px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #101010;
+      border: 1px dashed var(--line);
+      font-family: "Courier New", monospace;
+      color: var(--muted);
+    }
+    .output {
+      display: none;
+      margin-top: 12px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      background: #0a0a0a;
+    }
+    .output.show { display: block; }
+    .output img { display: block; width: 100%; height: auto; }
+    .log {
+      font-family: "Courier New", monospace;
+      background: #0a0a0a;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      color: #ddd;
+      white-space: pre-line;
+    }
+    footer { margin-top: 28px; color: #666; font-size: 12px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div>
+        <div class="title">PROJECT 12 :: Silent Executive — Graphon Resolution Agent</div>
+        <div class="subtitle">Vertical slice — Wizard of Oz demo, frontend only</div>
+      </div>
+      <div class="badge"><span class="dot"></span> LIVE DEMO READY</div>
+    </header>
+
+    <div class="grid">
+      <!-- LEFT: Gesture & Output -->
+      <section class="card">
+        <h3>Gesture Input</h3>
+        <div class="subtitle">Peace Sign → Triggers Export</div>
+        <div class="actions">
+          <button id="gestureBtn" title="Simulate Peace Sign">✌️ Simulate Gesture</button>
+          <button class="secondary" id="resetBtn" title="Reset demo">Reset</button>
+          <button class="ghost" id="openBtn" title="Show chart">Show Chart</button>
+        </div>
+        <div class="status" id="status">Waiting for gesture...</div>
+        <div class="output" id="output">
+          <img id="chartImage" src="demo_asset_chart.svg" alt="Generated chart output" />
+        </div>
+      </section>
+
+      <!-- RIGHT: Log / Tasks -->
+      <section class="card">
+        <h3>Session Log</h3>
+        <div class="log" id="log">
+==================================================
+PROJECT 12 :: EXECUTIVE SYNC :: TIMESTAMP LOG
+DATE: DEC 13, 2025 | MODE: DEMO
+==================================================
+[00:00:03] SYSTEM: Listening for gesture...
+[00:00:07] TIP: Click "Simulate Gesture" to trigger export.
+        </div>
+        <div class="card" style="margin-top:12px">
+          <h3>Actionable Tasks</h3>
+          <div class="log" id="tasks">
+[ ] 1. AUDIT: Review Sector 4 Logistics Contracts (Priority: HIGH)
+[ ] 2. FINANCE: Approve expedited shipping budget ($50k)
+[ ] 3. DESIGN: Update Q3 Board Deck with new risk adjustments.
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Frontend-only simulation. No backend, no APIs. Place your chart image as <strong>demo_asset_chart.png</strong> next to this file.
+    </footer>
+  </div>
+
+  <script>
+    const statusEl = document.getElementById('status');
+    const outputEl = document.getElementById('output');
+    const logEl = document.getElementById('log');
+    const tasksEl = document.getElementById('tasks');
+    const chartImg = document.getElementById('chartImage');
+
+    function appendLog(line) {
+      logEl.textContent += "\n" + line;
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+    function setStatus(text, color = '#ddd') {
+      statusEl.textContent = text;
+      statusEl.style.color = color;
+    }
+
+    document.getElementById('gestureBtn').addEventListener('click', () => {
+      setStatus('Gesture recognized: Peace Sign. Exporting...', '#00ff41');
+      appendLog('[00:00:10] GRAPHON: Gesture recognized (✌️). Exporting visual stack...');
+
+      // Simulate processing delay
+      setTimeout(() => {
+        outputEl.classList.add('show');
+        chartImg.onerror = () => {
+          setStatus('Chart image not found: demo_asset_chart.png', '#ff3333');
+          appendLog('[00:00:12] ERROR: Missing demo_asset_chart.png');
+        };
+        chartImg.onload = () => {
+          setStatus('Export complete. Chart displayed.', '#00ff41');
+          appendLog('[00:00:12] STATUS: Export complete. Chart displayed.');
+          // Update tasks
+          tasksEl.textContent = tasksEl.textContent.replace('[ ] 3. DESIGN', '[x] 3. DESIGN');
+        };
+        chartImg.src = 'demo_asset_chart.svg?cache=' + Date.now();
+      }, 800);
+    });
+
+    document.getElementById('resetBtn').addEventListener('click', () => {
+      outputEl.classList.remove('show');
+      setStatus('Waiting for gesture...');
+      appendLog('[00:00:15] SYSTEM: Reset state.');
+    });
+
+    document.getElementById('openBtn').addEventListener('click', () => {
+      outputEl.classList.add('show');
+      chartImg.src = 'demo_asset_chart.svg?cache=' + Date.now();
+      setStatus('Chart opened manually.', '#A259FF');
+      appendLog('[00:00:18] USER: Manually opened chart.');
+    });
+  </script>
+</body>
+</html>
