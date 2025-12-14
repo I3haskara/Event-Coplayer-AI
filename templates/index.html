@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Project 12: Silent Executive Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js" crossorigin="anonymous"></script>
+    
+    <style>
+        body { margin: 0; background: #111; overflow: hidden; font-family: 'Courier New', monospace; color: white; }
+        
+        /* VIDEO LAYERS */
+        video#webcam { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); opacity: 0.4; }
+        canvas#output_canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); pointer-events: none; }
+
+        /* HUD UI */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        .top-bar { 
+            background: rgba(0, 0, 0, 0.9); border-bottom: 2px solid #00ff00; 
+            padding: 15px 30px; display: flex; justify-content: space-between; 
+            font-weight: bold; color: #00ff00; font-size: 1.2em;
+        }
+
+        /* LEFT PANEL: CONTEXT */
+        #contextPanel {
+            position: absolute; top: 80px; left: 20px; width: 320px;
+            background: rgba(0,0,0,0.8); border: 1px solid #444; pointer-events: auto;
+        }
+        #slideImg { width: 100%; display: block; border-bottom: 1px solid #444; }
+        .panel-label { padding: 5px 10px; background: #222; font-size: 0.8em; color: #aaa; }
+        audio { width: 100%; height: 40px; }
+
+        /* RIGHT PANEL: DASHBOARD */
+        #dashboardPanel {
+            position: absolute; top: 80px; right: 20px; width: 350px; height: 85%;
+            background: rgba(0, 0, 0, 0.9); border: 2px solid #00ff00;
+            display: flex; flex-direction: column; pointer-events: auto;
+        }
+        .dash-header { padding: 15px; background: #003300; border-bottom: 1px solid #00ff00; text-align: center; font-weight: bold; }
+        #logContent { flex-grow: 1; overflow-y: auto; padding: 10px; }
+
+        /* LOG ITEMS */
+        .log-item { background: #222; margin-bottom: 10px; padding: 10px; border-left: 4px solid #555; font-size: 0.9em; transition: all 0.3s; }
+        .log-risk { border-left-color: #ff4444; }
+        .log-ok { border-left-color: #00C851; }
+        .log-file { background: #2C2C2C; border: 1px solid #A259FF; border-left: 6px solid #A259FF; }
+
+        /* GESTURE LEGEND (AUDIENCE GUIDE) */
+        #gestureLegend {
+            position: absolute; bottom: 20px; left: 20px;
+            background: rgba(0, 0, 0, 0.8); border: 1px solid #555; padding: 15px;
+            border-radius: 8px;
+        }
+        .legend-item { margin-bottom: 5px; font-size: 1.1em; color: #ccc; display: flex; align-items: center; }
+        .legend-icon { width: 30px; text-align: center; display: inline-block; margin-right: 10px; }
+        .active-legend { color: #00ff00; text-shadow: 0 0 10px #00ff00; font-weight: bold; }
+
+        /* CENTER ALERT */
+        .alert-box {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 3em; font-weight: bold; color: white;
+            background: rgba(0,0,0,0.9); padding: 40px; border: 4px solid white;
+            display: none; text-shadow: 0 0 20px rgba(255,255,255,0.5); text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <video id="webcam" autoplay playsinline></video>
+    <canvas id="output_canvas"></canvas>
+
+    <div id="hud">
+        <div class="top-bar">
+            <span>PROJECT 12 :: SILENT EXECUTIVE</span>
+            <span>● SYSTEM ONLINE</span>
+        </div>
+
+        <div id="contextPanel">
+            <div class="panel-label">LIVE FEED: ACME_Q3_DECK.PDF</div>
+            <img id="slideImg" src="/assets/slide_revenue.png" alt="Slide">
+            <div class="panel-label">AUDIO INPUT</div>
+            <audio id="audioPlayer" controls>
+                <source src="/assets/meeting_audio.mp3" type="audio/mpeg">
+            </audio>
+        </div>
+
+        <div id="dashboardPanel">
+            <div class="dash-header">RISK REGISTER & EXPORTS</div>
+            <div id="logContent">
+                <div style="color:#666; font-style:italic; padding:10px; text-align:center;">Waiting for gestures...</div>
+            </div>
+        </div>
+
+        <div id="gestureLegend">
+            <div style="color:#666; font-size:0.8em; margin-bottom:10px;">GESTURE COMMANDS</div>
+            <div class="legend-item" id="leg-audit"><span class="legend-icon">☝️</span> AUDIT (Index Up)</div>
+            <div class="legend-item" id="leg-approve"><span class="legend-icon">👍</span> APPROVE (Thumb Up)</div>
+            <div class="legend-item" id="leg-export"><span class="legend-icon">✌️</span> EXPORT (Peace Sign)</div>
+        </div>
+
+        <div id="mainAlert" class="alert-box">PROCESSING...</div>
+    </div>
+
+    <script type="module">
+        import { FilesetResolver, GestureRecognizer, DrawingUtils } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/vision_bundle.js";
+
+        let gestureRecognizer;
+        const video = document.getElementById("webcam");
+        const canvas = document.getElementById("output_canvas");
+        const ctx = canvas.getContext("2d");
+        let lastCommandTime = 0;
+
+        // 1. SETUP WITH HIGHER CONFIDENCE
+        const createGestureRecognizer = async () => {
+            const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision/wasm");
+            gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
+                baseOptions: {
+                    modelAssetPath: "https://storage.googleapis.com/mediapipe-models/gesture_recognizer/gesture_recognizer/float16/1/gesture_recognizer.task",
+                    delegate: "GPU"
+                },
+                runningMode: "VIDEO",
+                numHands: 1,
+                // STRICTER SETTINGS TO FIX FALSE POSITIVES
+                minHandDetectionConfidence: 0.6,
+                minHandPresenceConfidence: 0.6,
+                minTrackingConfidence: 0.6
+            });
+            enableCam();
+        };
+
+        function enableCam() {
+            navigator.mediaDevices.getUserMedia({ video: true }).then((stream) => {
+                video.srcObject = stream;
+                video.addEventListener("loadeddata", predictWebcam);
+            });
+        }
+
+        async function predictWebcam() {
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            let nowInMs = Date.now();
+            
+            if (gestureRecognizer) {
+                const results = gestureRecognizer.recognizeForVideo(video, nowInMs);
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                const drawingUtils = new DrawingUtils(ctx);
+
+                if (results.landmarks && results.landmarks.length > 0) {
+                    for (const landmarks of results.landmarks) {
+                        // Draw Green Skeleton if confident, Red if shaky
+                        const color = results.gestures[0][0].score > 0.7 ? "#00FF00" : "#FF0000";
+                        drawingUtils.drawConnectors(landmarks, GestureRecognizer.HAND_CONNECTIONS, { color: color, lineWidth: 4 });
+                        drawingUtils.drawLandmarks(landmarks, { color: "#FFFFFF", lineWidth: 1 });
+                    }
+
+                    // CHECK GESTURES
+                    if (results.gestures.length > 0) {
+                        const gesture = results.gestures[0][0].categoryName;
+                        const score = results.gestures[0][0].score;
+                        
+                        // Highlight Legend
+                        highlightLegend(gesture);
+
+                        // Only trigger if score is VERY HIGH (Fixes false positives)
+                        if (score > 0.75) { 
+                            handleGesture(gesture);
+                        }
+                    }
+                } else {
+                    highlightLegend("None");
+                }
+            }
+            window.requestAnimationFrame(predictWebcam);
+        }
+
+        let isProcessing = false;
+
+        async function handleGesture(gesture) {
+            const now = Date.now();
+            if (now - lastCommandTime < 3000) return; 
+
+            let command = null;
+            let msg = "";
+
+            if (gesture === "Pointing_Up") { command = "AUDIT"; msg = "☝️ AUDITING..."; } 
+            else if (gesture === "Thumb_Up") { command = "APPROVE"; msg = "👍 APPROVING..."; } 
+            else if (gesture === "Victory") { command = "EXPORT"; msg = "✌️ SYNCING..."; }
+
+            if (command) {
+                lastCommandTime = now;
+                showAlert(msg, "#fff");
+
+                // SPECIAL UI CASE FOR EXPORT (THE FIGMA FILE)
+                if (command === "EXPORT" && !isProcessing) {
+                    isProcessing = true;
+                    
+                    // 1. UI FEEDBACK: Show "Thinking"
+                    addLogItem(">> EXPORT COMMAND RECOGNIZED", "EXPORT");
+                    addLogItem(">> SYNCHRONIZING WITH GRAPHON...", "EXPORT");
+
+                    // 2. CALL THE PYTHON AGENT
+                    fetch('http://127.0.0.1:5000/trigger_export', { method: 'POST' })
+                    .then(response => response.json())
+                    .then(data => {
+                        // 3. UI FEEDBACK: Show Success
+                        addLogItem(">> NANO-BANANA: ASSET GENERATED", "EXPORT");
+                        addLogItem(">> FIGMA: SYNC COMPLETE [Q3_Board_Audit.fig]", "EXPORT");
+                        
+                        // Add the Figma file card
+                        addFigmaFileCard();
+                        
+                        isProcessing = false;
+                    })
+                    .catch(err => {
+                        console.error(err);
+                        addLogItem(">> ERROR: Agent offline", "EXPORT");
+                        isProcessing = false;
+                    });
+                    return;
+                }
+
+                try {
+                    const res = await fetch("/api/command", {
+                        method: "POST", headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ command: command })
+                    });
+                    const data = await res.json();
+                    showAlert(data.alert, data.color);
+                    addLogItem(data.alert, command);
+                } catch (e) { console.error(e); }
+            }
+        }
+
+        // --- UI HELPERS ---
+
+        function addFigmaFileCard() {
+            const container = document.getElementById("logContent");
+            if(container.innerText.includes("Waiting")) container.innerHTML = "";
+
+            const div = document.createElement("div");
+            div.className = "log-item log-file";
+            div.innerHTML = `
+                <div style="display:flex; align-items:center; color:#A259FF; font-weight:bold;">
+                    <span style="font-size:1.5em; margin-right:10px;">❖</span> FIGMA EXPORT
+                </div>
+                <div style="color:#fff; margin-top:5px;">File: Q3_Board_Audit.fig</div>
+                <div style="color:#888; font-size:0.8em;">Status: Synced via API</div>
+            `;
+            container.prepend(div);
+            showAlert("🚀 SENT TO FIGMA", "#A259FF");
+        }
+
+        function addLogItem(text, type) {
+            const container = document.getElementById("logContent");
+            if(container.innerText.includes("Waiting")) container.innerHTML = "";
+
+            const div = document.createElement("div");
+            let styleClass = type === "AUDIT" ? "log-risk" : "log-ok";
+            div.className = `log-item ${styleClass}`;
+            div.innerHTML = `<strong>${type}</strong><br>${text}`;
+            container.prepend(div);
+        }
+
+        function showAlert(text, color) {
+            const box = document.getElementById("mainAlert");
+            box.innerText = text;
+            box.style.borderColor = color;
+            box.style.color = color;
+            box.style.display = "block";
+            setTimeout(() => box.style.display = "none", 2500);
+        }
+
+        function highlightLegend(gesture) {
+            // Reset all
+            document.querySelectorAll('.legend-item').forEach(el => el.classList.remove('active-legend'));
+            
+            if (gesture === "Pointing_Up") document.getElementById('leg-audit').classList.add('active-legend');
+            if (gesture === "Thumb_Up") document.getElementById('leg-approve').classList.add('active-legend');
+            if (gesture === "Victory") document.getElementById('leg-export').classList.add('active-legend');
+        }
+
+        createGestureRecognizer();
+    </script>
+</body>
+</html>
